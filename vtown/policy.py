@@ -536,7 +536,7 @@ class PolicyEngine:
         remaining_budget = budget
         
         # Business support grants
-        business_grant = 5000
+        business_grant = self.model.config.get('policy_config', {}).get('business_grant_amount', 5000)
         max_business_grants = int(remaining_budget * 0.6 // business_grant)
         
         # Prioritize small businesses
@@ -551,7 +551,7 @@ class PolicyEngine:
         remaining_budget -= grants_given * business_grant
         
         # Skills training
-        training_cost = 500
+        training_cost = self.model.config.get('policy_config', {}).get('skills_training_cost', 500)
         max_training = int(remaining_budget // training_cost)
         
         # Target agricultural workers for sector transition
@@ -576,7 +576,7 @@ class PolicyEngine:
                      if hasattr(agent, 'sector')]
         
         # Direct grants for poorest households
-        grant_amount = 1000
+        grant_amount = self.model.config.get('policy_config', {}).get('direct_grant_amount', 1000)
         max_grants = int(budget * 0.4 // grant_amount)
         
         # Target lowest income households
@@ -591,7 +591,7 @@ class PolicyEngine:
         
         # Microfinance loans
         remaining_budget = budget - (grants_given * grant_amount)
-        loan_amount = 2000
+        loan_amount = self.model.config.get('policy_config', {}).get('microfinance_loan_amount', 2000)
         max_loans = int(remaining_budget // loan_amount)
         
         # Target households with some savings but limited capital

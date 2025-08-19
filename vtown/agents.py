@@ -28,23 +28,51 @@ class HouseholdAgent(Agent):
         self.pos = pos
         
         # Demographics
-        self.household_size = np.random.randint(2, 8)
+        min_hh, max_hh = self.model.config.get('household_size_range', [2, 8])
+        self.household_size = np.random.randint(min_hh, max_hh + 1)
         self.age_head = np.random.randint(20, 65)
         self.gender_head = np.random.choice(['male', 'female'], p=[0.7, 0.3])
         
         # Economic status
-        self.income = np.random.normal(3000, 1000)  # Monthly income in Taka
-        self.savings = max(0, np.random.normal(5000, 3000))
+        sector_dist = self.model.config.get('initial_sector_distribution', {
+            'agriculture': 0.6, 'manufacturing': 0.2, 'services': 0.2
+        })
         self.sector = np.random.choice(['agriculture', 'manufacturing', 'services'], 
-                                     p=[0.6, 0.2, 0.2])
+                                     p=[sector_dist['agriculture'], sector_dist['manufacturing'], sector_dist['services']])
+        # Initialize income around sector wage
+        wages = self.model.config.get('base_wages', {
+            'agriculture': 2500, 'manufacturing': 4000, 'services': 5000
+        })
+        self.income = np.random.normal(wages[self.sector], wages[self.sector] * 0.15)
+        self.savings = max(0, np.random.normal(self.income * 1.0, self.income * 0.6))
+
+        # Inclusion flags
+        self.has_microfinance_access = (np.random.random() < 
+            self.model.config.get('microfinance_membership_rate', 0.3))
+        self.has_offgrid_electricity = (np.random.random() < 
+            self.model.config.get('offgrid_electric_share', 0.0))
+        self.receives_remittances = (np.random.random() < 
+            self.model.config.get('remittance_receiving_rate', 0.0))
+        self.is_cooperative_member = (np.random.random() < 
+            self.model.config.get('cooperative_membership_rate', 0.0))
+        self.is_landless = (np.random.random() < 
+            self.model.config.get('landless_household_rate', 0.0))
+        
+        # Bangladesh-specific attributes
+        self.flood_affected = False
+        self.last_flood_step = -1
         
         # Human capital
-        self.education_level = np.random.randint(0, 12)  # Years of education
-        self.health_index = np.random.uniform(0.3, 1.0)  # 0-1 health index
+        edu_min, edu_max = self.model.config.get('education_range', [0, 12])
+        self.education_level = np.random.randint(edu_min, edu_max + 1)  # Years of education
+        h_min, h_max = self.model.config.get('health_range', [0.3, 1.0])
+        self.health_index = np.random.uniform(h_min, h_max)  # 0-1 health index
         
         # Location preferences
-        self.rural_attachment = np.random.uniform(0.2, 0.8)  # Preference for rural life
-        self.migration_threshold = np.random.uniform(1.2, 2.0)  # Income multiplier to migrate
+        ra_min, ra_max = self.model.config.get('rural_attachment_range', [0.2, 0.8])
+        self.rural_attachment = np.random.uniform(ra_min, ra_max)  # Preference for rural life
+        mt_min, mt_max = self.model.config.get('migration_threshold_range', [1.2, 2.0])
+        self.migration_threshold = np.random.uniform(mt_min, mt_max)  # Income multiplier to migrate
         
         # Behavioral parameters
         self.risk_tolerance = np.random.uniform(0.1, 0.9)
@@ -52,6 +80,7 @@ class HouseholdAgent(Agent):
         
     def step(self):
         """Execute one step of household decision-making."""
+        self.check_flood_effects()
         self.update_income()
         self.consider_migration()
         self.make_education_investment()
@@ -60,33 +89,67 @@ class HouseholdAgent(Agent):
         
     def update_income(self):
         """Update household income based on sector, location, and infrastructure access."""
-        base_income = {
+        wages = self.model.config.get('base_wages', {
             'agriculture': 2500,
             'manufacturing': 4000,
             'services': 5000
-        }[self.sector]
+        })
+        base_income = wages[self.sector]
         
         # Infrastructure bonuses
         infrastructure_multiplier = 1.0
         if self.has_road_access():
-            infrastructure_multiplier *= 1.2
+            infrastructure_multiplier *= self.model.config.get('productivity_multipliers', {}).get('infrastructure_road', 1.2)
         if self.has_market_access():
-            infrastructure_multiplier *= 1.15
+            infrastructure_multiplier *= self.model.config.get('productivity_multipliers', {}).get('infrastructure_market', 1.15)
         if self.has_utility_access():
-            infrastructure_multiplier *= 1.1
+            infrastructure_multiplier *= self.model.config.get('productivity_multipliers', {}).get('infrastructure_utility', 1.1)
             
         # Education and health bonuses
-        education_multiplier = 1 + (self.education_level * 0.05)
-        health_multiplier = 0.5 + (self.health_index * 0.5)
+        edu_factor = self.model.config.get('productivity_multipliers', {}).get('education_factor', 0.05)
+        health_factor = self.model.config.get('productivity_multipliers', {}).get('health_factor', 0.5)
+        education_multiplier = 1 + (self.education_level * edu_factor)
+        health_multiplier = 0.5 + (self.health_index * health_factor)
         
         # Random variation
-        random_factor = np.random.normal(1.0, 0.1)
+        random_sd = self.model.config.get('random_variation', {}).get('income', 0.1)
+        random_factor = np.random.normal(1.0, random_sd)
+        
+        # Apply Bangladesh-specific adjustments
+        income_multiplier = 1.0
+        
+        # Landless households in agriculture have lower income
+        if self.is_landless and self.sector == 'agriculture':
+            income_multiplier *= 0.7
+        
+        # Cooperative members have higher income due to better access
+        if self.is_cooperative_member:
+            income_multiplier *= 1.15
+        
+        # Urban premium for non-agriculture
+        if self.sector != 'agriculture':
+            center_x, center_y = self.model.grid.width // 2, self.model.grid.height // 2
+            distance_to_center = np.sqrt((self.pos[0] - center_x)**2 + (self.pos[1] - center_y)**2)
+            if distance_to_center <= 10:  # Urban area
+                rural_urban_multiplier = self.model.config.get('rural_urban_wage_multiplier', 1.0)
+                income_multiplier *= rural_urban_multiplier
+        
+        # Flood impact
+        if self.flood_affected:
+            income_multiplier *= 0.6  # 40% income loss during flood year
         
         self.income = (base_income * infrastructure_multiplier * 
-                      education_multiplier * health_multiplier * random_factor)
+                      education_multiplier * health_multiplier * 
+                      random_factor * income_multiplier)
+        
+        # Add remittances
+        if self.receives_remittances:
+            remittance_amount = np.random.normal(2000, 500)  # Monthly remittances
+            self.income += max(0, remittance_amount)
         
         # Update savings
-        consumption = self.income * 0.8  # 80% consumption rate
+        consumption_rate = self.model.config.get('consumption_rate', 0.8)
+        consumption = self.income * consumption_rate
         self.savings = max(0, self.savings + (self.income - consumption))
         
     def consider_migration(self):
@@ -129,27 +192,71 @@ class HouseholdAgent(Agent):
     def make_education_investment(self):
         """Decide on education investments for household members."""
         if self.savings > 1000 and self.education_level < 12:
-            education_cost = 500 * (self.education_level + 1)  # Increasing cost
+            education_cost = self.model.config.get('education_cost_multiplier', 500) * (self.education_level + 1)
+            invest_p = self.model.config.get('education_investment_probability', 0.3)
             
-            if self.savings > education_cost and np.random.random() < 0.3:
+            # Higher probability for cooperative members (access to education programs)
+            if self.is_cooperative_member:
+                invest_p *= 1.3
+                education_cost *= 0.8  # Subsidized through cooperative
+            
+            # Lower probability during flood years
+            if self.flood_affected:
+                invest_p *= 0.5
+            
+            if self.savings > education_cost and np.random.random() < invest_p:
                 self.savings -= education_cost
                 self.education_level += 1
                 
     def make_health_investment(self):
         """Decide on health investments."""
         if self.health_index < 0.8 and self.savings > 500:
-            health_cost = 200
-            if np.random.random() < 0.4:
+            health_cost = self.model.config.get('health_investment_cost', 200)
+            invest_p = self.model.config.get('health_investment_probability', 0.4)
+            
+            # Microfinance access increases health investment (health loans)
+            if self.has_microfinance_access:
+                invest_p *= 1.4
+                health_cost *= 0.9  # Subsidized through MFI programs
+            
+            # Flood affected households prioritize health
+            if self.flood_affected:
+                invest_p *= 1.2
+            
+            if np.random.random() < invest_p:
                 self.savings -= health_cost
-                self.health_index = min(1.0, self.health_index + 0.1)
+                self.health_index = min(1.0, self.health_index + self.model.config.get('health_improvement_per_investment', 0.1))
                 
     def consider_sector_change(self):
         """Consider changing economic sector."""
         if self.education_level >= 8 and self.sector == 'agriculture':
-            if np.random.random() < 0.1:  # 10% chance to switch
+            switch_prob = 0.1
+            
+            # Landless agricultural workers more likely to switch
+            if self.is_landless:
+                switch_prob *= 2.0
+            
+            # Cooperative members have better access to sector transition programs
+            if self.is_cooperative_member:
+                switch_prob *= 1.3
+            
+            # Flood pushes people out of agriculture
+            if self.flood_affected:
+                switch_prob *= 1.5
+                
+            if np.random.random() < switch_prob:
                 self.sector = np.random.choice(['manufacturing', 'services'])
+                
         elif self.education_level >= 10 and self.sector == 'manufacturing':
-            if np.random.random() < 0.05:  # 5% chance to switch to services
+            switch_prob = 0.05
+            
+            # Urban location makes services transition easier
+            center_x, center_y = self.model.grid.width // 2, self.model.grid.height // 2
+            distance_to_center = np.sqrt((self.pos[0] - center_x)**2 + (self.pos[1] - center_y)**2)
+            if distance_to_center <= 10:  # Urban area
+                switch_prob *= 2.0
+                
+            if np.random.random() < switch_prob:
                 self.sector = 'services'
                 
     def has_road_access(self) -> bool:
@@ -166,9 +273,23 @@ class HouseholdAgent(Agent):
                   
     def has_utility_access(self) -> bool:
         """Check if household has access to utilities."""
+        if getattr(self, 'has_offgrid_electricity', False):
+            return True
         neighbors = self.model.grid.get_neighbors(self.pos, moore=True, radius=2)
         return any(isinstance(agent, InfrastructureAgent) and agent.infrastructure_type == 'utility'
                   for agent in neighbors)
+    
+    def check_flood_effects(self):
+        """Check for flood occurrence and effects."""
+        flood_prob = self.model.config.get('flood_risk_probability', 0.0)
+        if np.random.random() < flood_prob and not self.flood_affected:
+            self.flood_affected = True
+            self.last_flood_step = self.model.step_count
+            # Reduce savings due to flood damage
+            self.savings *= 0.4
+        elif self.flood_affected and (self.model.step_count - self.last_flood_step) > 5:
+            # Recovery after 1 year (5 steps)
+            self.flood_affected = False
 
 
 class BusinessAgent(Agent):

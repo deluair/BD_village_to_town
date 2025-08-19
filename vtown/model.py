@@ -269,13 +269,15 @@ class TownDevelopmentModel(Model):
         if len(households) < 2:
             return 0
             
-        incomes = [h.income for h in households]
+        incomes = np.array([h.income for h in households])
+        incomes = incomes[incomes > 0]
+        if len(incomes) < 2:
+            return 0
         incomes.sort()
-        
         n = len(incomes)
-        cumsum = np.cumsum(incomes)
-        
-        return (n + 1 - 2 * sum((n + 1 - i) * income for i, income in enumerate(incomes, 1))) / (n * sum(incomes))
+        index = np.arange(1, n + 1)
+        gini = (np.sum((2 * index - n - 1) * incomes)) / (n * np.sum(incomes))
+        return float(gini)
         
     def calculate_average_education(self) -> float:
         """Calculate average education level."""
