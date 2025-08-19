@@ -1,0 +1,197 @@
+# Default configuration for Village to Town Development Simulation
+# This file contains all the key parameters that control the simulation behavior
+
+# Spatial Configuration
+grid_width: 50
+grid_height: 50
+
+# Initial Population
+initial_population: 200
+initial_businesses: 30
+
+# Economic Parameters
+base_wages:
+  agriculture: 2500      # Monthly wage in Taka
+  manufacturing: 4000
+  services: 5000
+
+productivity_multipliers:
+  education_factor: 0.05  # 5% income increase per year of education
+  health_factor: 0.5      # Health index affects 50% of income potential
+  infrastructure_road: 1.2
+  infrastructure_market: 1.15
+  infrastructure_utility: 1.1
+
+# Demographics
+household_size_range: [2, 8]
+age_head_range: [20, 65]
+gender_head_distribution: [0.7, 0.3]  # [male, female]
+
+# Initial Sector Distribution
+initial_sector_distribution:
+  agriculture: 0.6
+  manufacturing: 0.2
+  services: 0.2
+
+# Human Capital
+education_range: [0, 12]  # Years of education
+health_range: [0.3, 1.0]  # Health index
+
+# Migration Parameters
+rural_attachment_range: [0.2, 0.8]
+migration_threshold_range: [1.2, 2.0]  # Income multiplier to consider migration
+
+# Infrastructure Configuration
+infrastructure_costs:
+  road: 10000
+  school: 50000
+  clinic: 30000
+  market: 20000
+  utility: 40000
+
+infrastructure_coverage:
+  road: 1        # Coverage radius in grid cells
+  school: 3
+  clinic: 4
+  market: 5
+  utility: 2
+
+infrastructure_capacity:
+  road: 1000     # Traffic capacity
+  school: 200    # Students
+  clinic: 100    # Patients per month
+  market: 50     # Vendors
+  utility: 500   # Connections
+
+infrastructure_maintenance_rate: 0.05  # 5% of construction cost annually
+infrastructure_degradation_rate: 0.02  # 2% quality loss per year
+
+# Business Parameters
+business_size_distribution: [0.7, 0.25, 0.05]  # [small, medium, large]
+business_type_distribution: [0.5, 0.3, 0.2]    # [agriculture, manufacturing, services]
+
+business_productivity_range: [0.5, 1.5]
+business_capital:
+  small: [3000, 7000]    # [mean, std]
+  medium: [20000, 10000]
+  large: [50000, 20000]
+
+max_employees:
+  small: 5
+  medium: 20
+  large: 50
+
+# Policy Configuration
+policy_budget: 100000  # Annual policy budget in Taka
+
+policy_config:
+  # Infrastructure development weights
+  infrastructure_weights:
+    road: 0.3
+    school: 0.2
+    clinic: 0.2
+    market: 0.15
+    utility: 0.15
+  
+  # Program budgets
+  grant_program_budget: 20000
+  microfinance_budget: 15000
+  
+  # Target infrastructure ratios (per 100 people)
+  infrastructure_targets:
+    road: 0.5      # 1 road per 200 people
+    school: 0.25   # 1 school per 400 people
+    clinic: 0.2    # 1 clinic per 500 people
+    market: 0.15   # 1 market per 667 people
+    utility: 0.3   # 1 utility per 333 people
+  
+  # Budget allocation strategy
+  base_budget_allocation:
+    infrastructure: 0.5
+    education: 0.15
+    health: 0.15
+    economic: 0.1
+    grants: 0.1
+  
+  # Program costs
+  education_program_cost_per_person: 300
+  health_program_cost_per_person: 250
+  business_grant_amount: 5000
+  skills_training_cost: 500
+  direct_grant_amount: 1000
+  microfinance_loan_amount: 2000
+
+# Behavioral Parameters
+risk_tolerance_range: [0.1, 0.9]
+social_capital_range: [0.1, 1.0]
+
+# Economic Decisions
+consumption_rate: 0.8  # 80% of income consumed, 20% saved
+education_investment_probability: 0.3
+health_investment_probability: 0.4
+sector_change_probability:
+  agriculture_to_other: 0.1    # 10% chance per year if education >= 8
+  manufacturing_to_services: 0.05  # 5% chance per year if education >= 10
+
+# Investment Costs
+education_cost_multiplier: 500  # Cost = 500 * (education_level + 1)
+health_investment_cost: 200
+health_improvement_per_investment: 0.1
+
+# Urban Development
+urban_center: [25, 25]  # Grid coordinates of town center
+urban_radius: 10        # Radius defining urban area
+max_density_per_cell: 5 # Maximum agents per grid cell
+
+# Simulation Parameters
+steps_per_year: 5       # 5 simulation steps = 1 year
+policy_execution_frequency: 5  # Execute policies every 5 steps (annually)
+
+# Data Collection
+collect_agent_data: true
+collect_model_data: true
+output_frequency: 1     # Collect data every step
+
+# Randomization
+random_seed: null       # Set to integer for reproducible results
+random_variation:
+  income: 0.1           # 10% random variation in income calculations
+  productivity: 0.1     # 10% random variation in productivity
+
+# Visualization Settings (for web server)
+visualization:
+  grid_size: 500        # Pixel size of visualization grid
+  agent_colors:
+    household: "#3498db"
+    business: "#e74c3c"
+    infrastructure: "#2ecc71"
+  
+  infrastructure_colors:
+    road: "#34495e"
+    school: "#f39c12"
+    clinic: "#e67e22"
+    market: "#9b59b6"
+    utility: "#1abc9c"
+
+# Advanced Settings
+advanced:
+  # Migration patterns
+  migration_radius: 2   # How far agents consider moving
+  migration_cooldown: 10  # Steps before considering migration again
+  
+  # Business dynamics
+  business_expansion_threshold:
+    small_to_medium: 20000   # Profit needed to expand
+    medium_to_large: 50000
+  
+  expansion_probability:
+    small_to_medium: 0.1
+    medium_to_large: 0.05
+  
+  # Infrastructure effects
+  infrastructure_network_effects: true  # Roads connect to form networks
+  infrastructure_synergy_bonus: 0.05    # Additional bonus when multiple types present
+  
+  # Policy effectiveness
+  policy_learning_rate: 0.1  # How quickly policies adapt
+  policy_memory_length: 10   # How many past policies to remember
